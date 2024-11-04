@@ -88,15 +88,9 @@ update_outjob_file("neural_reactor_documentation.OutJob", project_name, "output_
 update_outjob_file("neural_reactor_gerber_drill.OutJob", project_name, "output_job_file/output_job_" + project_name + "_rev1/" + project_name + "_gerber_drill.OutJob")
 
 # Step 4: Create a .gitignore file
-gitignore_content = """*.PrjPcbStructure
-*.SchDoc
-*.PcbDoc
-*.PrjPCB
-*.PcbLib
-*.SchLib
-*.IntLib
-*.DsnWrk
-*.OutJob
+gitignore_content = f"""
+History/
+Project Logs for {project_name}/
 # Add other patterns to ignore
 """
 
