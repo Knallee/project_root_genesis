@@ -17,20 +17,21 @@ def create_folders(base_path, structure, project_name):
         if isinstance(substructure, dict):
             create_folders(path, substructure, project_name)
 
-def update_outjob_file(original_file_name, new_project_name, destination_file_name):
+def update_outjob_file(template_filename, project_name, destination_path):
     """
     Updates an .OutJob file with a new project name, replaces a specific path with the script's current directory path,
     then saves the updated content to a new file.
     """
     current_directory = os.getcwd()
+
     try:
-        with open(original_file_name, 'r', encoding='utf-8') as file:
+        with open(template_filename, 'r', encoding='utf-8') as file:
             content = file.read()
-        content = content.replace("neural_reactor", new_project_name)
+        content = content.replace("neural_reactor", project_name)
         content = content.replace("C:\\git_projects\\", current_directory + "\\")
-        with open(destination_file_name, 'w', encoding='utf-8') as new_file:
+        with open(destination_path, 'w', encoding='utf-8') as new_file:
             new_file.write(content)
-        print(f"File '{destination_file_name}' has been updated and saved in {current_directory}.")
+        print(f"File '{destination_path}' has been updated and saved in {current_directory}.")
     except Exception as e:
         print(f"An error occurred: {e}")
 
@@ -122,9 +123,12 @@ def add_project_parameters():
     parameters = [
         ("ProjectTitle", input("Enter Project Title: ")),
         ("PartNumber", input("Enter Part Number: ")),
-        ("LayoutRevision", input("Enter Layout Revision: ")),
-        ("SchematicRevision", input("Enter Schematic Revision: ")),
-        ("BomRevision", input("Enter BOM Revision: ")),
+        ("LayoutRevision",
+            input("Enter Layout Revision (Default: 1.0.0): ") or "1.0.0"),
+        ("SchematicRevision",
+            input("Enter Schematic Revision (Default: 1.0.0): ") or "1.0.0"),
+        ("BomRevision",
+            input("Enter BOM Revision (Default: 1.0.0): ") or "1.0.0"),
         ("ApprovedBy", "n/a"),
         ("SchematicReviewer", "n/a"),
         ("LayoutReviewer", "n/a"),
@@ -152,52 +156,68 @@ def add_project_parameters():
     print(f"Added {len(parameters)} parameters to {prjpcb_filename}.")
 
 # ---- Main Project Setup ----
-project_root = os.getcwd()
-project_name = os.path.basename(project_root)
+def main():
+    project_root = os.getcwd()
+    project_name = os.path.basename(project_root)
 
-folder_structure = {
-    "schematics": {},
-    "layout": {},
-    "output_job_file": {},
-    "draftsman_document": {},
-    "rules_and_stackup": {},
-    "production_data": {
-        "{{PROJECT_NAME}}": {
-            "fabrication_files": {
-                "pcb": {},
-                "panel": {},
-                "pick&place": {},
+    folder_structure = {
+        "schematics": {},
+        "layout": {},
+        "output_job_file": {},
+        "draftsman_document": {},
+        "rules_and_stackup": {},
+        "production_data": {
+            "{{PROJECT_NAME}}": {
+                "fabrication_files": {
+                    "pcb": {},
+                    "panel": {},
+                    "pick&place": {},
+                },
+                "fabrication_and_assembly": {},
+                "schematic_pdf": {},
+                "eq": {},
+                "po_and_qoutation": {},
+                "3d_model": {},
+                "bill_of_material": {},
             },
-            "fabrication_and_assembly": {},
-            "schematic_pdf": {},
-            "eq": {},
-            "po_and_qoutation": {},
-            "3d_model": {},
-            "bill_of_material": {},
         },
-    },
-}
+    }
 
+    print("Creating project folders...")
+    create_folders(project_root, folder_structure, project_name)
 
-create_folders(project_root, folder_structure, project_name)
-update_outjob_file("neural_reactor_documentation.OutJob", project_name, f"output_job_file/{project_name}_documentation.OutJob")
-update_outjob_file("neural_reactor_gerber_drill.OutJob", project_name, f"output_job_file/{project_name}_gerber_drill.OutJob")
+    outjob_templates = [
+        "documentation.OutJob",
+        "gerber_drill.OutJob"
+        ]
 
-populate_folders(project_root, project_name)
+    print("Updating .OutJob files...")
+    for template in outjob_templates:
+        dest_path = os.path.join("output_job_file", f"{project_name}_{template}")
+        update_outjob_file(template, project_name, dest_path)
 
-add_project_parameters()
+    
+    populate_folders(project_root, project_name)
 
-# Create a .gitignore file
-gitignore_content = r"""
-# Useless dirs
-Project\ Outputs
-Project\ Logs
-Project Outputs for*
-History
-"""
+    print("Adding project parameters to .PrjPcb...")
+    add_project_parameters()
 
-with open(os.path.join(project_root, ".gitignore"), "w") as gitignore_file:
-    gitignore_file.write(gitignore_content)
+    # Create a .gitignore file
+    gitignore_content = r"""
+    # Useless dirs
+    __pycache__
+    Project\ Outputs
+    Project\ Logs
+    Project Outputs for*
+    History
+    """
 
-print(f"Project '{project_name}' setup complete with dynamic folder naming.")
-print(f"Project directory is '{project_root}'")
+    gitignore_path = os.path.join(project_root, ".gitignore")
+    with open(gitignore_path, "w") as gitignore_file:
+        gitignore_file.write(gitignore_content.strip() + "\n")
+
+    print(f"Project '{project_name}' setup complete with dynamic folder naming.")
+    print(f"Project directory is '{project_root}'")
+
+if __name__ == "__main__":
+    main()
