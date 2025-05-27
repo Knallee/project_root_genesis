@@ -1,4 +1,5 @@
 import os
+import shutil
 
 def create_folders(base_path, structure, project_name):
     """
@@ -9,96 +10,194 @@ def create_folders(base_path, structure, project_name):
     :param project_name: The name of the project, used to replace placeholders.
     """
     for folder, substructure in structure.items():
-        # Replace placeholder with the project name and "rev1" if present
         if "{{PROJECT_NAME}}" in folder:
-            folder = folder.replace("{{PROJECT_NAME}}", project_name) + "_rev1"
+            folder = folder.replace("{{PROJECT_NAME}}", project_name)
         path = os.path.join(base_path, folder)
         os.makedirs(path, exist_ok=True)
-        if isinstance(substructure, dict):  # Check if the folder has subfolders
-            create_folders(path, substructure, project_name)  # Recursive call with the project name
-
+        if isinstance(substructure, dict):
+            create_folders(path, substructure, project_name)
 
 def update_outjob_file(original_file_name, new_project_name, destination_file_name):
     """
     Updates an .OutJob file with a new project name, replaces a specific path with the script's current directory path,
     then saves the updated content to a new file.
-
-    :param original_file_name: Name of the original .OutJob file.
-    :param new_project_name: New project name to replace occurrences of "neural_reactor".
-    :param destination_file_name: Name for the updated file to be saved.
     """
-    current_directory = os.getcwd()  # Get the current working directory of the script
+    current_directory = os.getcwd()
     try:
         with open(original_file_name, 'r', encoding='utf-8') as file:
             content = file.read()
-
-        # Replace "neural_reactor" with the new project name
         content = content.replace("neural_reactor", new_project_name)
-
-        # Replace "C:\git_projects\" with the current directory path
         content = content.replace("C:\\git_projects\\", current_directory + "\\")
-
-        # Write the updated content to a new file
         with open(destination_file_name, 'w', encoding='utf-8') as new_file:
             new_file.write(content)
-
         print(f"File '{destination_file_name}' has been updated and saved in {current_directory}.")
     except Exception as e:
         print(f"An error occurred: {e}")
 
+def populate_folders(project_root, project_name):
+    """
+    Moves and renames core project files, then injects them into the .PrjPcb file as [DocumentX] entries.
+    """
+    source_folder = os.path.join(project_root, "project_files")
+    file_moves = {
+        "neural_reactor.PcbDoc": os.path.join("layout", f"{project_name}.PcbDoc"),
+        "neural_reactor.SchDoc": os.path.join("schematics", f"{project_name}.SchDoc"),
+        "neural_reactor_assembly.PCBDwf": os.path.join("draftsman_document", f"{project_name}_assembly.PCBDwf"),
+        "neural_reactor_layers.PCBDwf": os.path.join("draftsman_document", f"{project_name}_layers.PCBDwf"),
+    }
 
+    for src_name, dest_relative in file_moves.items():
+        src_path = os.path.join(source_folder, src_name)
+        if not os.path.exists(src_path):
+            print(f"Warning: {src_name} not found in {source_folder}")
+            continue
+        dest_path = os.path.join(project_root, dest_relative)
+        try:
+            shutil.move(src_path, dest_path)
+            print(f"Moved: {src_name} -> {dest_relative}")
+        except Exception as e:
+            print(f"Failed to move {src_name}: {e}")
 
-# Step 1: Determine the script's current directory, assumed to be the project root
+    prjpcb_files = [f for f in os.listdir(project_root) if f.lower().endswith(".prjpcb")]
+    if prjpcb_files:
+        prjpcb_path = os.path.join(project_root, prjpcb_files[0])
+        with open(prjpcb_path, 'r', encoding='utf-8') as f:
+            lines = f.readlines()
+
+        doc_insert_index = 50 if len(lines) > 50 else len(lines)
+        document_entries = [
+            ("schematics", f"{project_name}.SchDoc", "OQVOPOFY"),
+            ("layout", f"{project_name}.PcbDoc", "DSKQCGXM"),
+            ("output_job_file", f"{project_name}_documentation.OutJob", ""),
+            ("output_job_file", f"{project_name}_gerber_drill.OutJob", ""),
+            ("draftsman_document", f"{project_name}_assembly.PCBDwf", "VOYHFPJL"),
+            ("draftsman_document", f"{project_name}_layers.PCBDwf", "JKABZEPW")
+        ]
+
+        document_template = ""
+        for i, (folder, filename, doc_id) in enumerate(document_entries, 1):
+            document_template += f"[Document{i}]\n"
+            document_template += f"DocumentPath={folder}\\{filename}\n"
+            document_template += "AnnotationEnabled=1\n"
+            document_template += "AnnotateStartValue=1\n"
+            document_template += "AnnotationIndexControlEnabled=0\n"
+            document_template += "AnnotateSuffix=\n"
+            document_template += "AnnotateScope=All\n"
+            document_template += "AnnotateOrder=-1\n"
+            document_template += "DoLibraryUpdate=1\n"
+            document_template += "DoDatabaseUpdate=1\n"
+            document_template += "ClassGenCCAutoEnabled=1\n"
+            document_template += "ClassGenCCAutoRoomEnabled=0\n"
+            document_template += "ClassGenNCAutoScope=None\n"
+            document_template += "DItemRevisionGUID=\n"
+            document_template += "GenerateClassCluster=0\n"
+            document_template += f"DocumentUniqueId={doc_id}\n\n"
+
+        document_template = document_template.strip()
+        lines = lines[:doc_insert_index] + document_template.strip().splitlines(keepends=True) + lines[doc_insert_index:]
+        with open(prjpcb_path, 'w', encoding='utf-8') as f:
+            f.writelines(lines)
+
+def add_project_parameters():
+    """
+    Adds predefined project parameters to an Altium .PrjPcb file before the [Configuration1] block.
+    Automatically detects the .PrjPcb file in the current directory.
+    Prompts the user for values where needed.
+    """
+    prjpcb_files = [f for f in os.listdir(os.getcwd()) if f.lower().endswith(".prjpcb")]
+    if not prjpcb_files:
+        print("No .PrjPcb file found in the current directory. Skipping parameter insertion.")
+        return
+    prjpcb_filename = prjpcb_files[0]
+    print(f"Detected .PrjPcb file: {prjpcb_filename}")
+    prjpcb_path = os.path.join(os.getcwd(), prjpcb_filename)
+    designer_input = input("Who is the designer? (Knalle/Gregge): ").strip().lower()
+    if designer_input == "knalle":
+        drawn_by = "Christoffer Cederberg"
+    elif designer_input == "gregge":
+        drawn_by = "Georgij Michaliutin"
+    else:
+        drawn_by = input("Enter designer name manually: ")
+
+    parameters = [
+        ("ProjectTitle", input("Enter Project Title: ")),
+        ("PartNumber", input("Enter Part Number: ")),
+        ("LayoutRevision", input("Enter Layout Revision: ")),
+        ("SchematicRevision", input("Enter Schematic Revision: ")),
+        ("BomRevision", input("Enter BOM Revision: ")),
+        ("ApprovedBy", "n/a"),
+        ("SchematicReviewer", "n/a"),
+        ("LayoutReviewer", "n/a"),
+        ("DrawnBy", drawn_by),
+    ]
+
+    with open(prjpcb_path, 'r', encoding='utf-8') as f:
+        lines = f.readlines()
+
+    insert_index = next((i for i, line in enumerate(lines) if line.strip() == "[Configuration1]"), len(lines))
+    existing_count = sum(1 for line in lines if line.strip().startswith("[Parameter"))
+    next_index = existing_count + 1
+
+    new_lines = []
+    for name, value in parameters:
+        new_lines.append(f"[Parameter{next_index}]\n")
+        new_lines.append(f"Name={name}\n")
+        new_lines.append(f"Value={value}\n\n")
+        next_index += 1
+
+    updated_lines = lines[:insert_index] + new_lines + lines[insert_index:]
+    with open(prjpcb_path, 'w', encoding='utf-8') as f:
+        f.writelines(updated_lines)
+
+    print(f"Added {len(parameters)} parameters to {prjpcb_filename}.")
+
+# ---- Main Project Setup ----
 project_root = os.getcwd()
 project_name = os.path.basename(project_root)
 
-# Step 2: Define your desired complex folder structure with nested subfolders
 folder_structure = {
     "schematics": {},
-    "layout":{},
-    "output_job_file":{
-        "output_job_"+"{{PROJECT_NAME}}":{},
-    },
-    "draftsman_document":{},
-    "rules_and_stackup":{},
-    "production_data":{
+    "layout": {},
+    "output_job_file": {},
+    "draftsman_document": {},
+    "rules_and_stackup": {},
+    "production_data": {
         "{{PROJECT_NAME}}": {
-            "fabrication_files":{
-                "pcb":{},
-                "panel":{},
-                "pick&place":{},
+            "fabrication_files": {
+                "pcb": {},
+                "panel": {},
+                "pick&place": {},
             },
-            "assembly_drawings":{},
-            "pcb_datasheet":{},
-            "schematic_pdf":{},
-            "layout_pdf":{},
-            "eq":{},
-            "po_and_qoutation":{},
-            "3d_model":{},
-            "bill_of_material":{},
+            "fabrication_and_assembly": {},
+            "schematic_pdf": {},
+            "eq": {},
+            "po_and_qoutation": {},
+            "3d_model": {},
+            "bill_of_material": {},
         },
     },
 }
 
-# Step 3: Use the recursive function to create the folders and subfolders, replacing placeholders
+
 create_folders(project_root, folder_structure, project_name)
+update_outjob_file("neural_reactor_documentation.OutJob", project_name, f"output_job_file/{project_name}_documentation.OutJob")
+update_outjob_file("neural_reactor_gerber_drill.OutJob", project_name, f"output_job_file/{project_name}_gerber_drill.OutJob")
 
+populate_folders(project_root, project_name)
 
-update_outjob_file("neural_reactor_documentation.OutJob", project_name, "output_job_file/output_job_" + project_name + "_rev1/" + project_name + "_documentation.OutJob")
-update_outjob_file("neural_reactor_gerber_drill.OutJob", project_name, "output_job_file/output_job_" + project_name + "_rev1/" + project_name + "_gerber_drill.OutJob")
+add_project_parameters()
 
-# Step 4: Create a .gitignore file
-gitignore_content = f"""
-History/
-Project Logs for {project_name}/
-# Add other patterns to ignore
+# Create a .gitignore file
+gitignore_content = r"""
+# Useless dirs
+Project\ Outputs
+Project\ Logs
+Project Outputs for*
+History
 """
 
 with open(os.path.join(project_root, ".gitignore"), "w") as gitignore_file:
     gitignore_file.write(gitignore_content)
 
-
 print(f"Project '{project_name}' setup complete with dynamic folder naming.")
-print(f"Project directory is '{project_root}")
-
-print(project_root + "____jej")
+print(f"Project directory is '{project_root}'")
