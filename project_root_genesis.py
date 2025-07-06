@@ -32,6 +32,11 @@ def update_outjob_file(template_filename, project_name, destination_path):
         with open(destination_path, 'w', encoding='utf-8') as new_file:
             new_file.write(content)
         print(f"File '{destination_path}' has been updated and saved in {current_directory}.")
+    
+        # Remove original template file
+        os.remove(template_filename)
+        print(f"Original template '{template_filename}' has been removed.")
+    
     except Exception as e:
         print(f"An error occurred: {e}")
 
@@ -98,6 +103,15 @@ def populate_folders(project_root, project_name):
         lines = lines[:doc_insert_index] + document_template.strip().splitlines(keepends=True) + lines[doc_insert_index:]
         with open(prjpcb_path, 'w', encoding='utf-8') as f:
             f.writelines(lines)
+
+    # Remove project_files dir
+    if os.path.isdir(source_folder):
+        try:
+            shutil.rmtree(source_folder)
+            print(f"Removed folder: {source_folder}")
+        except Exception as e:
+            print(f"Failed to remove 'project_files' folder: {e}")
+    
 
 def add_project_parameters():
     """
@@ -201,20 +215,6 @@ def main():
 
     print("Adding project parameters to .PrjPcb...")
     add_project_parameters()
-
-    # Create a .gitignore file
-    gitignore_content = r"""
-    # Useless dirs
-    __pycache__
-    Project\ Outputs
-    Project\ Logs
-    Project Outputs for*
-    History
-    """
-
-    gitignore_path = os.path.join(project_root, ".gitignore")
-    with open(gitignore_path, "w") as gitignore_file:
-        gitignore_file.write(gitignore_content.strip() + "\n")
 
     print(f"Project '{project_name}' setup complete with dynamic folder naming.")
     print(f"Project directory is '{project_root}'")
