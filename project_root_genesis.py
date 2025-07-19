@@ -126,16 +126,13 @@ def add_project_parameters():
     prjpcb_filename = prjpcb_files[0]
     print(f"Detected .PrjPcb file: {prjpcb_filename}")
     prjpcb_path = os.path.join(os.getcwd(), prjpcb_filename)
-    designer_input = input("Who is the designer? (Knalle/Gregge): ").strip().lower()
-    if designer_input == "knalle":
-        drawn_by = "Christoffer Cederberg"
-    elif designer_input == "gregge":
-        drawn_by = "Georgij Michaliutin"
-    else:
-        drawn_by = input("Enter designer name manually: ")
+    
+    drawn_by = input("Who is the designer?")
+    project_name = input("Enter Project Name: ")
 
     parameters = [
-        ("ProjectTitle", input("Enter Project Title: ")),
+        ("ItemName", project_name),
+        ("ProjectTitle", project_name),
         ("PartNumber", input("Enter Part Number: ")),
         ("LayoutRevision",
             input("Enter Layout Revision (Default: 1.0.0): ") or "1.0.0"),
@@ -143,9 +140,9 @@ def add_project_parameters():
             input("Enter Schematic Revision (Default: 1.0.0): ") or "1.0.0"),
         ("BomRevision",
             input("Enter BOM Revision (Default: 1.0.0): ") or "1.0.0"),
-        ("ApprovedBy", "n/a"),
-        ("SchematicReviewer", "n/a"),
-        ("LayoutReviewer", "n/a"),
+        ("ApprovedBy", "N/A"),
+        ("SchematicReviewer", "N/A"),
+        ("LayoutReviewer", "N/A"),
         ("DrawnBy", drawn_by),
     ]
 
@@ -177,6 +174,7 @@ def main():
     folder_structure = {
         "schematics": {},
         "layout": {},
+        "bom_document": {},
         "output_job_file": {},
         "draftsman_document": {},
         "rules_and_stackup": {},
@@ -185,7 +183,6 @@ def main():
                 "fabrication_files": {
                     "pcb": {},
                     "panel": {},
-                    "pick&place": {},
                 },
                 "fabrication_and_assembly": {},
                 "schematic_pdf": {},
